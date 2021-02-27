@@ -13,6 +13,7 @@ struct input_options
   size_t port;
   std::string pid_file;
   std::string port_file;
+  std::string ignore_tag;
 
   bool cache;
   std::vector<std::string> cache_files;

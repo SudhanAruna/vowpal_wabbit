@@ -447,7 +447,9 @@ input_options parse_source(vw& all, options_i& options)
                      "A^B^C. Note: this will become the default in a future version, so enabling this option will "
                      "migrate you to the new behavior and silence the warning."))
       .add(make_option("flatbuffer", parsed_options.flatbuffer)
-               .help("data file will be interpreted as a flatbuffer file"));
+               .help("data file will be interpreted as a flatbuffer file"))
+      .add(make_option("ignore_tag", parsed_options.ignore_tag)
+                .help("ignore example set that are associated with tag character <arg>"));
 
   options.add_and_parse(input_options);
 
@@ -1630,6 +1632,45 @@ void parse_modules(
   }
 }
 
+// void function prints the examples from the data file which
+// doesn't contain the provided tag (ignore tag)
+void parse_ignore_tag_arg(vw& all)
+{
+  auto parsed_input_source = parse_source(all, *all.options.get());
+  std::string filepath = all.data_filename;
+  if (!filepath.empty())
+  {
+    std::unique_ptr<VW::io::reader> file_adapter;
+    try
+    {
+      file_adapter = VW::io::open_file_reader(filepath);
+    }
+    catch (...)
+    {
+        THROW("error: cannot read the data file " << filepath);
+    }
+
+    char* buf;
+
+    all.example_parser->input->add_file(std::move(file_adapter));
+    size_t num_char = all.example_parser->input->readto(buf, '\n');
+    all.example_parser->input->close_file();
+
+    std::vector<VW::string_view> example_lines;
+    tokenize('\n', buf, example_lines);
+    for(auto line : example_lines)
+    {
+      // checks if example contains the provided ignore tag
+      if (line.find(parsed_input_source.ignore_tag ) == std::string::npos)  *(all.trace_message) << line << std::endl;
+    }
+  }
+  else
+  {
+    THROW("error: please provide the data file");
+  }
+  exit(0);
+}
+
 void parse_sources(options_i& options, vw& all, io_buf& model, bool skipModelLoad)
 {
   if (!skipModelLoad)
@@ -1778,6 +1819,8 @@ vw* initialize(std::unique_ptr<options_i, options_deleter_type> options, io_buf*
     // Loads header of model files and loads the command line options into the options object.
     bool interactions_settings_duplicated;
     load_header_merge_options(*all.options.get(), all, *model, interactions_settings_duplicated);
+
+    if (all.options->was_supplied("ignore_tag")) { parse_ignore_tag_arg(all); }
 
     std::vector<std::string> dictionary_nses;
     parse_modules(*all.options.get(), all, interactions_settings_duplicated, dictionary_nses);
